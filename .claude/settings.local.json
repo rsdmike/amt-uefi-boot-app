@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "C:\\Users\\Mike\\Development\\cloud-deployment\\rpc-go",
+      "C:\\Users\\Mike\\Development\\go-wsman-messages"
+    ],
+    "allow": [
+      "Bash(*)"
+    ]
+  }
+}
