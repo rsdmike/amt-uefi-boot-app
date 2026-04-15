@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Windows exe (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/x86_64-pc-windows-msvc/debug/uefi-amt-provision.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "cargo build (windows)"
+        },
+        {
+            "name": "Debug Windows exe (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/x86_64-pc-windows-msvc/debug/uefi-amt-provision.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "cargo build (windows)"
+        },
+        {
+            "name": "Run UEFI in QEMU (WSL)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "C:/Windows/System32/wsl.exe",
+            "args": [
+                "-e", "bash", "-lc",
+                "qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive format=raw,file=fat:rw:$(wslpath '${workspaceFolder}/target/qemu-esp') -net none -serial stdio"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "stage UEFI ESP"
+        }
+    ]
+}
