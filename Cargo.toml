@@ -1,0 +1,30 @@
+[package]
+name = "uefi-amt-provision"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["uefi-target"]
+uefi-target = ["dep:uefi"]
+windows-target = ["dep:windows-sys"]
+
+[dependencies]
+uefi = { version = "0.35", features = ["panic_handler", "logger"], optional = true }
+windows-sys = { version = "0.59", features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_Security",
+], optional = true }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+strip = true

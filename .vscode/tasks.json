@@ -1,0 +1,40 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cargo build (windows)",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "+stable", "build",
+                "--no-default-features",
+                "--features", "windows-target",
+                "--target", "x86_64-pc-windows-msvc"
+            ],
+            "problemMatcher": ["$rustc"],
+            "group": "build"
+        },
+        {
+            "label": "cargo build (uefi)",
+            "type": "shell",
+            "command": "wsl",
+            "args": [
+                "-e", "bash", "-lc",
+                "cargo build --target x86_64-unknown-uefi"
+            ],
+            "problemMatcher": ["$rustc"],
+            "group": "build"
+        },
+        {
+            "label": "stage UEFI ESP",
+            "type": "shell",
+            "command": "wsl",
+            "args": [
+                "-e", "bash", "-lc",
+                "set -e; ESP=$(wslpath '${workspaceFolder}/target/qemu-esp'); mkdir -p \"$ESP/EFI/BOOT\"; cp target/x86_64-unknown-uefi/debug/uefi-amt-provision.efi \"$ESP/EFI/BOOT/BOOTX64.EFI\""
+            ],
+            "problemMatcher": [],
+            "dependsOn": ["cargo build (uefi)"]
+        }
+    ]
+}

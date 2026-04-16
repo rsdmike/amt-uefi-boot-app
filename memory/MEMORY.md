@@ -1,0 +1,4 @@
+- [User platform](user_platform.md) — Windows 11, default to Windows-compatible instructions
+- [UEFI lessons learned](project_uefi_lessons.md) — ABI mismatch fix (uefi_call_wrapper), OVMF paths, build toolchain notes
+- [AMT CCM architecture](project_amt_architecture.md) — Real provisioning flow from RPC-Go: HECI→PTHI for state, HECI→LME→APF→WSMAN for CCM activation
+- [WSL build constraint](feedback_wsl_build.md) — Cannot run make/gcc from Claude; user runs build commands in WSL

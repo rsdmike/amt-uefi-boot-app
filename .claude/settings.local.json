@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(where pdftoppm:*)",
+      "Bash(where pdftotext:*)",
+      "Bash(where mutool:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "Bash(export PATH=\"$PATH:/c/Users/Mike/.cargo/bin\")",
+      "Bash(cargo build *)",
+      "Bash(grep -i \"\\\\.go$\")",
+      "Bash(find *)",
+      "Bash(cargo check *)",
+      "Bash(cargo +stable check --no-default-features --features windows-target --target x86_64-pc-windows-msvc)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Mike\\Development\\cloud-deployment\\rpc-go",
+      "C:\\Users\\Mike\\Development\\go-wsman-messages"
+    ]
+  }
+}
