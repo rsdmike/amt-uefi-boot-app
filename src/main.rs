@@ -83,7 +83,7 @@ pub fn write_timestamp(out: &mut impl core::fmt::Write) {
     }
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 pub fn format_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
@@ -97,7 +97,7 @@ pub fn format_timestamp() -> String {
 
 /// Debug println — gated by DEBUG_LOG. Every line is timestamped.
 /// On UEFI: writes to log buffer only (flushed to debug.log on USB).
-/// On Windows: writes to stdout.
+/// On Windows/Linux: writes to stdout.
 #[macro_export]
 macro_rules! dprintln {
     () => { if $crate::DEBUG_LOG {
@@ -106,7 +106,7 @@ macro_rules! dprintln {
             $crate::write_timestamp(&mut $crate::LogWriter);
             let _ = $crate::LogWriter.write_str("\n");
         }
-        #[cfg(feature = "windows-target")] { println!("{}", $crate::format_timestamp()); }
+        #[cfg(any(feature = "windows-target", feature = "linux-target"))] { println!("{}", $crate::format_timestamp()); }
     } };
     ($($arg:tt)*) => { if $crate::DEBUG_LOG {
         #[cfg(feature = "uefi-target")] {
@@ -115,7 +115,7 @@ macro_rules! dprintln {
             let _ = write!($crate::LogWriter, $($arg)*);
             let _ = $crate::LogWriter.write_str("\n");
         }
-        #[cfg(feature = "windows-target")] { println!("{}{}", $crate::format_timestamp(), format!($($arg)*)); }
+        #[cfg(any(feature = "windows-target", feature = "linux-target"))] { println!("{}{}", $crate::format_timestamp(), format!($($arg)*)); }
     } };
 }
 
@@ -145,7 +145,7 @@ const DEFAULT_AMT_PASSWORD: &[u8] = b"P@ssw0rd";
 fn sleep_ms(ms: u64) {
     #[cfg(feature = "uefi-target")]
     uefi::boot::stall((ms * 1000) as usize);
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     std::thread::sleep(std::time::Duration::from_millis(ms));
 }
 
@@ -777,7 +777,7 @@ fn uefi_main() -> Status {
     Status::SUCCESS
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 fn main() {
     ui::init();
     println!("AMT Configuration Tool");
@@ -787,7 +787,10 @@ fn main() {
         Ok(h) => h,
         Err(e) => {
             eprintln!("FAILED: Could not open MEI device ({:?})", e);
+            #[cfg(feature = "windows-target")]
             eprintln!("Ensure Intel MEI driver is installed and you are running as Administrator.");
+            #[cfg(feature = "linux-target")]
+            eprintln!("Ensure the mei/mei_me kernel module is loaded and /dev/mei0 is accessible (try running as root or adding your user to the appropriate group).");
             return;
         }
     };

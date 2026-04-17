@@ -99,7 +99,7 @@ macro_rules! ui_print {
             let mut w = GopWriter;
             let _ = write!(w, $($arg)*);
         }
-        #[cfg(feature = "windows-target")]
+        #[cfg(any(feature = "windows-target", feature = "linux-target"))]
         { print!($($arg)*); }
     };
 }
@@ -112,7 +112,7 @@ macro_rules! ui_println {
             let mut w = GopWriter;
             let _ = w.write_str("\n");
         }
-        #[cfg(feature = "windows-target")]
+        #[cfg(any(feature = "windows-target", feature = "linux-target"))]
         { println!(); }
     };
     ($($arg:tt)*) => {
@@ -123,7 +123,7 @@ macro_rules! ui_println {
             let _ = write!(w, $($arg)*);
             let _ = w.write_str("\n");
         }
-        #[cfg(feature = "windows-target")]
+        #[cfg(any(feature = "windows-target", feature = "linux-target"))]
         { println!($($arg)*); }
     };
 }
@@ -158,9 +158,9 @@ pub fn init() {
     }
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 pub fn init() {
-    // On Windows, just clear screen with ANSI codes
+    // Clear screen with ANSI codes
     print!("\x1B[2J\x1B[H");
 }
 
@@ -181,7 +181,7 @@ pub fn clear() {
     }
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 pub fn clear() {
     print!("\x1B[2J\x1B[H");
 }
@@ -198,7 +198,7 @@ pub fn v_center(content_lines: usize) {
             ui_println!();
         }
     }
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     {
         let _ = content_lines;
         ui_println!();
@@ -210,7 +210,7 @@ pub fn show_cursor() {
     // No hardware cursor in GOP mode
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 pub fn show_cursor() {}
 
 #[cfg(feature = "uefi-target")]
@@ -220,7 +220,7 @@ fn margin() -> usize {
     if cols > box_total { (cols - box_total) / 2 } else { 0 }
 }
 
-#[cfg(feature = "windows-target")]
+#[cfg(any(feature = "windows-target", feature = "linux-target"))]
 fn margin() -> usize {
     let cols = 80usize; // assume 80 columns on terminal
     let box_total = BOX_INNER + 2;
@@ -267,6 +267,32 @@ pub fn wait_key() -> char {
         windows_sys::Win32::System::Console::SetConsoleMode(stdin, old_mode);
 
         buf[0] as char
+    }
+}
+
+#[cfg(feature = "linux-target")]
+pub fn wait_key() -> char {
+    unsafe {
+        // Put stdin into raw (non-canonical, no-echo) mode so a single
+        // keypress is delivered without waiting for Enter.
+        let mut old: libc::termios = std::mem::zeroed();
+        let got = libc::tcgetattr(libc::STDIN_FILENO, &mut old) == 0;
+        if got {
+            let mut new = old;
+            new.c_lflag &= !(libc::ICANON | libc::ECHO);
+            new.c_cc[libc::VMIN] = 1;
+            new.c_cc[libc::VTIME] = 0;
+            libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &new);
+        }
+
+        let mut buf = [0u8; 1];
+        let n = libc::read(libc::STDIN_FILENO, buf.as_mut_ptr() as *mut libc::c_void, 1);
+
+        if got {
+            libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &old);
+        }
+
+        if n == 1 { buf[0] as char } else { '\0' }
     }
 }
 

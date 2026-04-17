@@ -1,6 +1,6 @@
 # UEFI AMT Configuration Tool (Rust)
 
-A bare-metal UEFI application and Windows CLI tool for Intel AMT provisioning via HECI/MEI.
+A bare-metal UEFI application, Windows CLI, and Linux CLI for Intel AMT provisioning via HECI/MEI.
 
 ## Features
 
@@ -42,6 +42,24 @@ cargo +stable build --release --no-default-features --features windows-target --
 - Run as **Administrator** (MEI driver access requires elevation)
 - Intel MEI driver must be installed (Intel Management Engine Interface)
 
+### Linux (runs in OS, uses `/dev/mei0`)
+
+```bash
+cargo build --no-default-features --features linux-target --target x86_64-unknown-linux-gnu
+```
+
+Output: `target/x86_64-unknown-linux-gnu/debug/uefi-amt-provision`
+
+Release build:
+```bash
+cargo build --release --no-default-features --features linux-target --target x86_64-unknown-linux-gnu
+```
+
+**Requirements:**
+- `mei` / `mei_me` kernel module loaded (usually autoloaded on Intel platforms)
+- Access to `/dev/mei0` — run as `root`, or grant your user access via udev/group
+- Intel AMT-capable platform (Management Engine present)
+
 ## Debug Logging
 
 Set `DEBUG_LOG = true` in `src/main.rs` to enable verbose protocol-level logging from all modules (HECI, LME, APF, HTTP, WSMAN).
@@ -49,4 +67,4 @@ Set `DEBUG_LOG = true` in `src/main.rs` to enable verbose protocol-level logging
 ## Prerequisites
 
 - Rust nightly toolchain (for UEFI target, configured via `rust-toolchain.toml`)
-- Rust stable toolchain (for Windows target): `rustup install stable`
+- Rust stable toolchain (for Windows/Linux targets): `rustup install stable`

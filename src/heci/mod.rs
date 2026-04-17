@@ -4,6 +4,11 @@ mod windows;
 #[cfg(feature = "windows-target")]
 pub use self::windows::*;
 
+#[cfg(feature = "linux-target")]
+mod linux;
+#[cfg(feature = "linux-target")]
+pub use self::linux::*;
+
 #[cfg(feature = "uefi-target")]
 pub mod regs;
 #[cfg(feature = "uefi-target")]

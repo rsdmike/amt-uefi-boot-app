@@ -133,7 +133,7 @@ impl LmeSession {
     }
 
     /// Initialize LME on Windows: open a new MEI device handle for LME client.
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     pub fn init(old_heci: &mut HeciContext) -> Result<Self> {
         dprintln!("LME: Opening MEI device for LME client...");
         old_heci.close();
@@ -223,12 +223,12 @@ impl LmeSession {
     }
 
     // On Windows, MEI driver handles HBM/flow control — just use send/receive directly
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     fn raw_send(&self, data: &[u8]) -> Result<()> {
         self.heci.send(data)
     }
 
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     fn raw_recv(&self, buf: &mut [u8]) -> Result<u32> {
         self.heci.receive(buf)
     }
@@ -494,7 +494,7 @@ impl LmeSession {
         self.try_channel_open()
     }
 
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     pub fn reopen_channel(&mut self) -> Result<()> {
         self.try_channel_open()
     }

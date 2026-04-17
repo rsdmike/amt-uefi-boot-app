@@ -58,7 +58,7 @@ fn pthi_call(heci: &mut HeciContext, cmd: &[u8], resp: &mut [u8]) -> Result<u32>
     // Brief delay to let ME settle
     #[cfg(feature = "uefi-target")]
     uefi::boot::stall(10_000);
-    #[cfg(feature = "windows-target")]
+    #[cfg(any(feature = "windows-target", feature = "linux-target"))]
     std::thread::sleep(std::time::Duration::from_millis(10));
 
     heci.send(cmd)?;
