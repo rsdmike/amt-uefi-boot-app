@@ -22,6 +22,11 @@ windows-sys = { version = "0.59", features = [
 ], optional = true }
 libc = { version = "0.2", optional = true }
 
+# wsman-rs v2 — path deps to sibling repo
+wsman-apf = { path = "../go-wsman-messages-rs/crates/wsman-apf" }
+wsman-core = { path = "../go-wsman-messages-rs/crates/wsman-core" }
+wsman-amt = { path = "../go-wsman-messages-rs/crates/wsman-amt" }
+
 [profile.dev]
 panic = "abort"
 
