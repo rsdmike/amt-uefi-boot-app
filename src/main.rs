@@ -126,7 +126,6 @@ mod heci;
 mod amt;
 mod md5;
 mod str_util;
-mod lme;
 mod http;
 mod wsman;
 mod ui;
@@ -137,8 +136,9 @@ mod font;
 use uefi::prelude::*;
 
 use crate::heci::HeciContext;
+use crate::heci::transport::{AppHeciHooks, AppHeciTransport};
 use crate::amt::{AMT_CONTROL_MODE_PRE_PROVISIONING, AMT_CONTROL_MODE_ACM};
-use crate::lme::LmeSession;
+use wsman_apf::session::ApfSession;
 
 const DEFAULT_AMT_PASSWORD: &[u8] = b"P@ssw0rd";
 
@@ -543,13 +543,12 @@ fn do_activate_ccm(heci: &mut HeciContext) {
     // and would cause the APF channel to timeout if done after channel_open.
     ui::show_working("Activating CCM...");
 
-    dprintln!("=== LME INIT ===");
-    #[cfg(feature = "uefi-target")]
-    flush_log();
-    let mut lme = match LmeSession::init(heci) {
-        Ok(l) => l,
+    // Tear down AMTHI and open a fresh HECI context for LME.
+    heci.close();
+    let lme_heci = match crate::heci::HeciContext::new() {
+        Ok(h) => h,
         Err(e) => {
-            dprintln!("=== LME INIT FAILED: {:?} ===", e);
+            dprintln!("=== HECI init for LME FAILED: {:?} ===", e);
             #[cfg(feature = "uefi-target")]
             flush_log();
 
@@ -562,24 +561,75 @@ fn do_activate_ccm(heci: &mut HeciContext) {
             ui::box_center("Activate CCM");
             ui::box_sep();
             ui::box_blank();
-            ui::box_line("Failed to open LME tunnel.");
+            ui::box_line("Failed to initialize HECI for LME.");
             ui::box_blank();
             ui::press_any_key();
             return;
         }
     };
 
-    dprintln!("=== LME INIT OK (port_fwd={}), CHANNEL OPEN ===",
-              lme.port_forwarding_established() as u8);
-    // One-shot flush right before channel_open so a crash inside it is locatable.
-    // Do NOT add more delay here — ME's LME session has a tight timeout between
-    // the last apf_handshake send and the first CHANNEL_OPEN.
+    let mut lme_heci = lme_heci;
+    if let Err(e) = lme_heci.connect_client(&wsman_apf::message::LME_UUID) {
+        dprintln!("=== LME connect FAILED: {:?} ===", e);
+        #[cfg(feature = "uefi-target")]
+        flush_log();
+
+        lme_heci.close();
+        let _ = unsafe { heci.init() };
+        let _ = heci.connect_amthi();
+
+        ui::clear();
+        ui::v_center(9);
+        ui::box_top();
+        ui::box_center("Activate CCM");
+        ui::box_sep();
+        ui::box_blank();
+        ui::box_line("Failed to connect LME client.");
+        ui::box_blank();
+        ui::press_any_key();
+        return;
+    }
+
+    #[cfg(feature = "uefi-target")]
+    let me_addr = lme_heci.me_addr;
+    #[cfg(not(feature = "uefi-target"))]
+    let me_addr: u8 = 0;
+    #[cfg(feature = "uefi-target")]
+    let host_addr = lme_heci.host_addr;
+    #[cfg(not(feature = "uefi-target"))]
+    let host_addr: u8 = 0;
+    let transport = AppHeciTransport::new(lme_heci);
+    let mut lme = ApfSession::new(transport, AppHeciHooks, me_addr, host_addr);
+
+    dprintln!("=== APF HANDSHAKE ===");
+    #[cfg(feature = "uefi-target")]
+    flush_log();
+    if let Err(e) = lme.handshake() {
+        dprintln!("=== APF HANDSHAKE FAILED: {:?} ===", e);
+        #[cfg(feature = "uefi-target")]
+        flush_log();
+
+        lme.close();
+        let _ = unsafe { heci.init() };
+        let _ = heci.connect_amthi();
+
+        ui::clear();
+        ui::v_center(9);
+        ui::box_top();
+        ui::box_center("Activate CCM");
+        ui::box_sep();
+        ui::box_blank();
+        ui::box_line("Failed APF handshake.");
+        ui::box_blank();
+        ui::press_any_key();
+        return;
+    }
+    dprintln!("=== APF HANDSHAKE OK, CHANNEL OPEN ===");
     #[cfg(feature = "uefi-target")]
     flush_log();
 
     if let Err(e) = lme.channel_open() {
         dprintln!("=== CHANNEL OPEN FAILED: {:?} ===", e);
-        let degraded = !lme.port_forwarding_established();
 
         lme.close();
         let _ = unsafe { heci.init() };
@@ -594,12 +644,7 @@ fn do_activate_ccm(heci: &mut HeciContext) {
         ui::box_center("Activate CCM");
         ui::box_sep();
         ui::box_blank();
-        if degraded {
-            ui::box_line("Failed to open APF channel.");
-            ui::box_line("(ME did not establish port forwarding)");
-        } else {
-            ui::box_line("Failed to open APF channel.");
-        }
+        ui::box_line("Failed to open APF channel.");
         ui::box_blank();
         ui::press_any_key();
         return;

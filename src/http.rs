@@ -1,5 +1,9 @@
 use crate::error::{Error, Result};
-use crate::lme::LmeSession;
+use crate::heci::transport::{AppHeciHooks, AppHeciTransport};
+use wsman_apf::session::ApfSession;
+
+type Session = ApfSession<AppHeciTransport, AppHeciHooks>;
+
 use crate::md5;
 use crate::str_util::*;
 
@@ -250,7 +254,7 @@ fn build_auth_header(auth: &mut DigestAuth, buf: &mut [u8]) -> usize {
 }
 
 /// POST body to /wsman over LME APF channel.
-pub fn post_wsman(lme: &mut LmeSession, body: &[u8], auth: Option<&mut DigestAuth>, resp: &mut HttpResponse) -> Result<()> {
+pub fn post_wsman(lme: &mut Session, body: &[u8], auth: Option<&mut DigestAuth>, resp: &mut HttpResponse) -> Result<()> {
     use core::sync::atomic::{AtomicBool, Ordering};
     static IN_USE: AtomicBool = AtomicBool::new(false);
     if IN_USE.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
@@ -305,21 +309,23 @@ pub fn post_wsman(lme: &mut LmeSession, body: &[u8], auth: Option<&mut DigestAut
     // full LME session reconnect, which is required because some ME firmware
     // sends HBM_CLIENT_DISCONNECT_REQ on a plain reopen over the same session
     // and the platform hard-resets during our handling of that disconnect.
-    if !lme.channel_active {
+    if !lme.channel_active() {
         dprintln!("HTTP: Reopening APF channel (full LME reconnect)...");
-        lme.reopen_channel()?;
+        lme.reopen_channel().map_err(|_| Error::DeviceError)?;
     }
 
     // Send through LME APF channel
-    lme.send(&req[..pos])?;
+    lme.send_bytes(&req[..pos]).map_err(|_| Error::DeviceError)?;
 
-    // Receive response
-    lme.receive(10000)?;
+    // Receive response — caller-owned buffer.
+    let mut rx_buf = [0u8; 4096];
+    let rx_len = lme.recv_bytes(&mut rx_buf)
+        .map_err(|_| Error::DeviceError)? as u32;
 
-    dprintln!("HTTP: Received {} bytes", lme.rx_len);
+    dprintln!("HTTP: Received {} bytes", rx_len);
 
     // Parse response
-    parse_response(&lme.rx_buf, lme.rx_len, resp)?;
+    parse_response(&rx_buf, rx_len, resp)?;
 
     dprintln!("HTTP: Status {}, body {} bytes", resp.status_code, resp.body_len);
 

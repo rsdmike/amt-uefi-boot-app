@@ -1,9 +1,12 @@
 use crate::error::{Error, Result};
-use crate::lme::LmeSession;
+use crate::heci::transport::{AppHeciHooks, AppHeciTransport};
+use wsman_apf::session::ApfSession;
 use crate::amt::LsaCredentials;
 use crate::http::{self, HttpResponse, DigestAuth};
 use crate::md5;
 use crate::str_util::*;
+
+type Session = ApfSession<AppHeciTransport, AppHeciHooks>;
 
 pub struct WsmanCcmResult {
     pub setup_return: u32,
@@ -112,7 +115,7 @@ fn build_setup_ccm(buf: &mut [u8], password_hash: &[u8]) -> usize {
 }
 
 /// Perform one WSMAN call with digest auth retry (up to 3 attempts).
-fn wsman_call(lme: &mut LmeSession, auth: &mut DigestAuth, body: &[u8], resp: &mut HttpResponse, label: &str) -> Result<()> {
+fn wsman_call(lme: &mut Session, auth: &mut DigestAuth, body: &[u8], resp: &mut HttpResponse, label: &str) -> Result<()> {
     dprintln!("WSMAN: {} (body={} bytes)", label, body.len());
 
     for attempt in 0..3 {
@@ -162,7 +165,7 @@ fn hash_admin_password(digest_realm: &[u8], password: &[u8], hex_out: &mut [u8; 
 }
 
 /// Full CCM activation: GetGeneralSettings -> HostBasedSetup -> CommitChanges.
-pub fn activate_ccm(lme: &mut LmeSession, lsa: &LsaCredentials, admin_password: &[u8]) -> Result<WsmanCcmResult> {
+pub fn activate_ccm(lme: &mut Session, lsa: &LsaCredentials, admin_password: &[u8]) -> Result<WsmanCcmResult> {
     use core::sync::atomic::{AtomicBool, Ordering};
     static IN_USE: AtomicBool = AtomicBool::new(false);
     if IN_USE.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
