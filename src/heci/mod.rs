@@ -9,6 +9,8 @@ mod linux;
 #[cfg(feature = "linux-target")]
 pub use self::linux::*;
 
+pub mod transport;
+
 #[cfg(feature = "uefi-target")]
 pub mod regs;
 #[cfg(feature = "uefi-target")]

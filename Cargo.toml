@@ -10,7 +10,7 @@ windows-target = ["dep:windows-sys"]
 linux-target = ["dep:libc"]
 
 [dependencies]
-uefi = { version = "0.35", features = ["panic_handler", "logger"], optional = true }
+uefi = { version = "0.35", features = ["panic_handler", "logger", "global_allocator"], optional = true }
 windows-sys = { version = "0.59", features = [
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Foundation",
