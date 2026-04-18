@@ -126,8 +126,6 @@ mod heci;
 mod amt;
 mod md5;
 mod str_util;
-mod http;
-mod wsman;
 mod wsman_glue;
 mod ui;
 #[cfg(feature = "uefi-target")]
@@ -137,9 +135,7 @@ mod font;
 use uefi::prelude::*;
 
 use crate::heci::HeciContext;
-use crate::heci::transport::{AppHeciHooks, AppHeciTransport};
 use crate::amt::{AMT_CONTROL_MODE_PRE_PROVISIONING, AMT_CONTROL_MODE_ACM};
-use wsman_apf::session::ApfSession;
 
 const DEFAULT_AMT_PASSWORD: &[u8] = b"P@ssw0rd";
 
@@ -536,128 +532,16 @@ fn do_activate_ccm(heci: &mut HeciContext) {
         }
     };
 
-    dprintln!("=== GOT LSA, STARTING LME ===");
-    #[cfg(feature = "uefi-target")]
-    flush_log();
-
-    // Show working BEFORE opening LME — screen drawing is slow in UEFI
-    // and would cause the APF channel to timeout if done after channel_open.
     ui::show_working("Activating CCM...");
-
-    // Tear down AMTHI and open a fresh HECI context for LME.
-    heci.close();
-    let lme_heci = match crate::heci::HeciContext::new() {
-        Ok(h) => h,
-        Err(e) => {
-            dprintln!("=== HECI init for LME FAILED: {:?} ===", e);
-            #[cfg(feature = "uefi-target")]
-            flush_log();
-
-            let _ = unsafe { heci.init() };
-            let _ = heci.connect_amthi();
-
-            ui::clear();
-            ui::v_center(9);
-            ui::box_top();
-            ui::box_center("Activate CCM");
-            ui::box_sep();
-            ui::box_blank();
-            ui::box_line("Failed to initialize HECI for LME.");
-            ui::box_blank();
-            ui::press_any_key();
-            return;
-        }
-    };
-
-    let mut lme_heci = lme_heci;
-    if let Err(e) = lme_heci.connect_client(&wsman_apf::message::LME_UUID) {
-        dprintln!("=== LME connect FAILED: {:?} ===", e);
-        #[cfg(feature = "uefi-target")]
-        flush_log();
-
-        lme_heci.close();
-        let _ = unsafe { heci.init() };
-        let _ = heci.connect_amthi();
-
-        ui::clear();
-        ui::v_center(9);
-        ui::box_top();
-        ui::box_center("Activate CCM");
-        ui::box_sep();
-        ui::box_blank();
-        ui::box_line("Failed to connect LME client.");
-        ui::box_blank();
-        ui::press_any_key();
-        return;
-    }
-
-    #[cfg(feature = "uefi-target")]
-    let me_addr = lme_heci.me_addr;
-    #[cfg(not(feature = "uefi-target"))]
-    let me_addr: u8 = 0;
-    #[cfg(feature = "uefi-target")]
-    let host_addr = lme_heci.host_addr;
-    #[cfg(not(feature = "uefi-target"))]
-    let host_addr: u8 = 0;
-    let transport = AppHeciTransport::new(lme_heci);
-    let mut lme = ApfSession::new(transport, AppHeciHooks, me_addr, host_addr);
-
-    dprintln!("=== APF HANDSHAKE ===");
-    #[cfg(feature = "uefi-target")]
-    flush_log();
-    if let Err(e) = lme.handshake() {
-        dprintln!("=== APF HANDSHAKE FAILED: {:?} ===", e);
-        #[cfg(feature = "uefi-target")]
-        flush_log();
-
-        lme.close();
-        let _ = unsafe { heci.init() };
-        let _ = heci.connect_amthi();
-
-        ui::clear();
-        ui::v_center(9);
-        ui::box_top();
-        ui::box_center("Activate CCM");
-        ui::box_sep();
-        ui::box_blank();
-        ui::box_line("Failed APF handshake.");
-        ui::box_blank();
-        ui::press_any_key();
-        return;
-    }
-    dprintln!("=== APF HANDSHAKE OK, CHANNEL OPEN ===");
+    dprintln!("=== CALLING wsman_glue::activate_ccm ===");
     #[cfg(feature = "uefi-target")]
     flush_log();
 
-    if let Err(e) = lme.channel_open() {
-        dprintln!("=== CHANNEL OPEN FAILED: {:?} ===", e);
+    let result = wsman_glue::activate_ccm(heci, &lsa, DEFAULT_AMT_PASSWORD);
 
-        lme.close();
-        let _ = unsafe { heci.init() };
-        let _ = heci.connect_amthi();
-
-        #[cfg(feature = "uefi-target")]
-        flush_log();
-
-        ui::clear();
-        ui::v_center(9);
-        ui::box_top();
-        ui::box_center("Activate CCM");
-        ui::box_sep();
-        ui::box_blank();
-        ui::box_line("Failed to open APF channel.");
-        ui::box_blank();
-        ui::press_any_key();
-        return;
-    }
-
-    dprintln!("=== CHANNEL OPEN OK, WSMAN ===");
-
-    let result = wsman::activate_ccm(&mut lme, &lsa, DEFAULT_AMT_PASSWORD);
-
-    lme.close();
-
-    // Always re-init HECI after LME session
+    // Always re-init HECI after the LME session — wsman_glue::open_client
+    // tore down AMTHI to make room for LME. Restore AMTHI so subsequent
+    // menu actions (do_amt_info, etc.) work.
     let _ = unsafe { heci.init() };
     let _ = heci.connect_amthi();
 
@@ -671,12 +555,7 @@ fn do_activate_ccm(heci: &mut HeciContext) {
     match result {
         Ok(ccm_result) => {
             ui::box_kv("Status", "SUCCESS");
-
-            let realm = core::str::from_utf8(
-                &ccm_result.digest_realm[..str_util::ascii_len(&ccm_result.digest_realm)]
-            ).unwrap_or("?");
-            ui::box_kv("DigestRealm", realm);
-
+            ui::box_kv("DigestRealm", &ccm_result.digest_realm);
             if let Ok(mode) = amt::get_control_mode(heci) {
                 ui::box_kv("Verified Mode", amt::control_mode_str(mode));
             }
