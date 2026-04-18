@@ -369,9 +369,65 @@ fn do_deactivate(heci: &mut HeciContext) {
     }
 
     if control_mode == AMT_CONTROL_MODE_ACM {
-        ui::box_line("Device is in Admin Control Mode (ACM).");
-        ui::box_line("Cannot deactivate ACM from here.");
+        ui::box_kv("Current Mode", amt::control_mode_str(control_mode));
         ui::box_blank();
+        ui::box_line("Deactivate ACM via WSMAN? (y/n)");
+        ui::box_blank();
+        ui::box_bottom();
+
+        let ch = ui::wait_key();
+        if ch != 'y' && ch != 'Y' {
+            return;
+        }
+
+        let lsa = match amt::get_local_system_account(heci) {
+            Ok(l) => l,
+            Err(_) => {
+                ui::clear();
+                ui::v_center(9);
+                ui::box_top();
+                ui::box_center("Deactivate ACM");
+                ui::box_sep();
+                ui::box_blank();
+                ui::box_line("Failed to get Local System Account.");
+                ui::box_blank();
+                ui::press_any_key();
+                return;
+            }
+        };
+
+        ui::show_working("Deactivating ACM...");
+        let result = wsman_glue::unprovision_acm(heci, &lsa);
+
+        // Restore AMTHI for subsequent menu actions (open_client tore it down).
+        let _ = unsafe { heci.init() };
+        let _ = heci.connect_amthi();
+
+        ui::clear();
+        ui::v_center(10);
+        ui::box_top();
+        ui::box_center("Deactivation Result (ACM)");
+        ui::box_sep();
+        ui::box_blank();
+
+        match result {
+            Ok(_) => {
+                ui::box_kv("Status", "SUCCESS");
+                if let Ok(mode) = amt::get_control_mode(heci) {
+                    ui::box_kv("New Mode", amt::control_mode_str(mode));
+                }
+            }
+            Err(e) => {
+                let mut msg = [0u8; 40];
+                let n = format_error(&mut msg, e);
+                let s = core::str::from_utf8(&msg[..n]).unwrap_or("FAILED");
+                ui::box_kv("Status", s);
+            }
+        }
+
+        ui::box_blank();
+        #[cfg(feature = "uefi-target")]
+        flush_log();
         ui::press_any_key();
         return;
     }
