@@ -2,7 +2,7 @@
 //!
 //! Public entry points:
 //! - `activate_ccm` — GetGeneralSettings then HostBasedSetup. CCM provisioning.
-//! - `unprovision_acm` — added in Task 8 (Phase 3).
+//! - `unprovision_acm` — SetupAndConfigurationService::Unprovision. ACM deactivation.
 //!
 //! Both share `open_client`, which closes the AMTHI HECI session, opens
 //! a fresh one for LME, runs APF handshake + channel_open, and returns a
@@ -100,6 +100,29 @@ pub fn activate_ccm(
         setup_return: out.return_value,
         digest_realm: gs.digest_realm,
     })
+}
+
+/// ACM deactivation over WSMAN: SetupAndConfigurationService::Unprovision.
+/// PTHI unprovision (in src/amt.rs) only works for CCM; this is the ACM path.
+pub fn unprovision_acm(
+    old_heci: &mut HeciContext,
+    lsa: &LsaCredentials,
+) -> Result<u32> {
+    use wsman_amt::setupandconfiguration::{
+        ProvisioningMode, SetupAndConfigurationService, UnprovisionInput,
+    };
+
+    let mut client = open_client(old_heci, lsa)?;
+    let out = SetupAndConfigurationService::new(&mut client)
+        .unprovision(UnprovisionInput {
+            mode: ProvisioningMode::None,
+        })
+        .map_err(map_wsman_err)?;
+
+    if out.return_value != 0 {
+        return Err(Error::DeviceError);
+    }
+    Ok(out.return_value)
 }
 
 fn hash_admin_password(realm: &[u8], password: &[u8], hex_out: &mut [u8; 33]) {
