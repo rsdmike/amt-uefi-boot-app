@@ -128,6 +128,7 @@ mod md5;
 mod str_util;
 mod http;
 mod wsman;
+mod wsman_glue;
 mod ui;
 #[cfg(feature = "uefi-target")]
 mod font;
